@@ -5,6 +5,16 @@ It monitors domains and IP addresses every second, keeps short-term availability
 stores state/history in `%AppData%`, supports tray mode/autostart, and includes an integrated
 WinMTR-style traceroute view.
 
+## Screenshots
+
+Main monitoring view:
+
+![Main monitoring view](HealthChecker/img/2026-04-03%2013_24_32-HealthChecker.png)
+
+Traceroute view:
+
+![Traceroute view](HealthChecker/img/2026-04-03%2013_24_42-HealthChecker.png)
+
 ## Key capabilities
 
 - Add monitoring targets as:
