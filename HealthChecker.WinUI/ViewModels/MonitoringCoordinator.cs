@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using HealthChecker_WinUI.Infrastructure;
 using HealthChecker_WinUI.Services;
 using Microsoft.UI;
@@ -31,6 +32,7 @@ public sealed class MonitoringCoordinator : ObservableObject, IAsyncDisposable
     private bool _initialized;
     private bool _isMonitoring = true;
     private bool _startWithWindows;
+    private bool _startMinimizedToTray;
     private int _onlineTargets;
     private int _offlineTargets;
     private double _fleetUptimeLastHourPercent;
@@ -41,6 +43,7 @@ public sealed class MonitoringCoordinator : ObservableObject, IAsyncDisposable
     private string _newDescription = string.Empty;
     private DateTimeOffset _lastSummaryRefresh = DateTimeOffset.MinValue;
     private DateTimeOffset _lastFleetHistoryRefresh = DateTimeOffset.MinValue;
+    private long _minimumAcceptedSampleUnix;
 
     private bool _isTraceView;
     private string _traceCaption = "Traceroute";
@@ -92,6 +95,25 @@ public sealed class MonitoringCoordinator : ObservableObject, IAsyncDisposable
 
             TryApplyStartup(value);
             _ = SaveStartupSettingAsync(value, _shutdownCts.Token);
+        }
+    }
+
+    public bool StartMinimizedToTray
+    {
+        get => _startMinimizedToTray;
+        set
+        {
+            if (!SetProperty(ref _startMinimizedToTray, value))
+            {
+                return;
+            }
+
+            if (!_initialized)
+            {
+                return;
+            }
+
+            _ = SaveStartMinimizedSettingAsync(value, _shutdownCts.Token);
         }
     }
 
@@ -237,6 +259,9 @@ public sealed class MonitoringCoordinator : ObservableObject, IAsyncDisposable
         OnPropertyChanged(nameof(StartWithWindows));
         TryApplyStartup(_startWithWindows, updateStatusOnSuccess: false);
 
+        _startMinimizedToTray = await _stateStore.LoadStartMinimizedToTrayAsync(_shutdownCts.Token);
+        OnPropertyChanged(nameof(StartMinimizedToTray));
+
         await _worker.StartAsync(GetTargetsSnapshot, HandleProbeResultAsync, OnWorkerError, _shutdownCts.Token);
         _worker.IsPaused = !IsMonitoring;
 
@@ -313,6 +338,87 @@ public sealed class MonitoringCoordinator : ObservableObject, IAsyncDisposable
     public async Task ProbeNowAsync()
     {
         await _worker.ProbeNowAsync(_shutdownCts.Token);
+    }
+
+    public Task OpenStorageFolderAsync()
+    {
+        try
+        {
+            Directory.CreateDirectory(_stateStore.DataDirectoryPath);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _stateStore.DataDirectoryPath,
+                UseShellExecute = true
+            });
+
+            StatusMessage = "Opened storage folder.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not open storage folder: {exception.Message}";
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public async Task CompactDatabaseAsync()
+    {
+        try
+        {
+            StatusMessage = "Compacting database...";
+            await _stateStore.CompactDatabaseAsync(_shutdownCts.Token);
+            await RefreshFleetHistoryAsync(force: true, _shutdownCts.Token);
+            StatusMessage = "Database compacted.";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Database compact failed: {exception.Message}";
+        }
+    }
+
+    public Task ResetStatisticsAsync()
+    {
+        var resetTimestampUtc = DateTimeOffset.UtcNow;
+        Volatile.Write(ref _minimumAcceptedSampleUnix, resetTimestampUtc.ToUnixTimeSeconds());
+
+        foreach (var target in Targets)
+        {
+            target.ResetStatistics();
+        }
+
+        FleetHistoryBars.Clear();
+        _targetHistoryRefresh.Clear();
+        RecalculateSummaryFromTargets();
+        OnPropertyChanged(nameof(FleetHistoryHint));
+
+        StatusMessage = $"Statistics reset requested at {resetTimestampUtc.ToLocalTime():dd.MM HH:mm:ss}.";
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _stateStore.ResetStatisticsAsync(resetTimestampUtc, _shutdownCts.Token);
+                await RunOnUiAsync(() =>
+                {
+                    StatusMessage = $"Statistics reset completed. Deleted samples up to {resetTimestampUtc.ToLocalTime():dd.MM HH:mm:ss}.";
+                }, _shutdownCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception exception)
+            {
+                await RunOnUiAsync(() =>
+                {
+                    StatusMessage = $"Statistics reset failed: {exception.Message}";
+                }, _shutdownCts.Token);
+            }
+        });
+
+        return Task.CompletedTask;
     }
 
     public void ToggleMonitoring()
@@ -396,6 +502,11 @@ public sealed class MonitoringCoordinator : ObservableObject, IAsyncDisposable
         ProbeResult result,
         CancellationToken cancellationToken)
     {
+        if (result.Timestamp.ToUnixTimeSeconds() <= Volatile.Read(ref _minimumAcceptedSampleUnix))
+        {
+            return;
+        }
+
         await _stateStore.AppendProbeAsync(targetSnapshot.Id, result, cancellationToken);
 
         MonitoringTargetViewModel? targetViewModel = null;
@@ -494,6 +605,21 @@ public sealed class MonitoringCoordinator : ObservableObject, IAsyncDisposable
         try
         {
             await _stateStore.SaveStartWithWindowsAsync(enabled, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Save failed: {exception.Message}";
+        }
+    }
+
+    private async Task SaveStartMinimizedSettingAsync(bool enabled, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _stateStore.SaveStartMinimizedToTrayAsync(enabled, cancellationToken);
+            StatusMessage = enabled
+                ? "App will start minimized to tray."
+                : "App will start with main window visible.";
         }
         catch (Exception exception)
         {

@@ -15,15 +15,18 @@ public partial class App : Application
         InitializeComponent();
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         Monitoring = new MonitoringCoordinator(dispatcherQueue);
 
-        _window = new MainWindow();
-        _window.Closed += OnMainWindowClosed;
+        await Monitoring.InitializeAsync();
 
-        _ = Monitoring.InitializeAsync();
+        var launchArgs = args.Arguments ?? string.Empty;
+        var launchInTray = launchArgs.Contains("--tray", StringComparison.OrdinalIgnoreCase) || Monitoring.StartMinimizedToTray;
+
+        _window = new MainWindow(launchInTray);
+        _window.Closed += OnMainWindowClosed;
 
         _window.Activate();
     }

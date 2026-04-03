@@ -6,6 +6,7 @@ public sealed class MonitoringWorkerService : IAsyncDisposable
 {
     private readonly NetworkProbeService _probeService;
     private readonly TimeSpan _interval;
+    private readonly int _maxParallelProbes;
     private readonly SemaphoreSlim _cycleGate = new(1, 1);
 
     private Func<IReadOnlyList<MonitoringTarget>>? _targetsProvider;
@@ -15,10 +16,12 @@ public sealed class MonitoringWorkerService : IAsyncDisposable
     private Task? _loopTask;
     private bool _disposed;
 
-    public MonitoringWorkerService(NetworkProbeService probeService, TimeSpan? interval = null)
+    public MonitoringWorkerService(NetworkProbeService probeService, TimeSpan? interval = null, int? maxParallelProbes = null)
     {
         _probeService = probeService;
         _interval = interval ?? TimeSpan.FromSeconds(1);
+        var defaultParallelism = Math.Clamp(Environment.ProcessorCount * 2, 8, 32);
+        _maxParallelProbes = Math.Clamp(maxParallelProbes ?? defaultParallelism, 1, 128);
     }
 
     public bool IsPaused { get; set; }
@@ -133,8 +136,16 @@ public sealed class MonitoringWorkerService : IAsyncDisposable
                 return;
             }
 
-            var probes = snapshot.Select(target => ProbeTargetAsync(target, resultHandler, cancellationToken));
-            await Task.WhenAll(probes);
+            var options = new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = _maxParallelProbes
+            };
+
+            await Parallel.ForEachAsync(
+                snapshot,
+                options,
+                async (target, token) => await ProbeTargetAsync(target, resultHandler, token));
         }
         finally
         {

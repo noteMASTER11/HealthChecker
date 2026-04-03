@@ -6,6 +6,7 @@ namespace HealthChecker_WinUI.Services;
 public sealed class SqliteMonitoringStore
 {
     private const string SettingsStartWithWindows = "start_with_windows";
+    private const string SettingsStartMinimizedToTray = "start_minimized_to_tray";
     private const string LegacyStateFileName = "state.json";
 
     private readonly string _dataDirectory;
@@ -23,6 +24,8 @@ public sealed class SqliteMonitoringStore
     }
 
     public string DatabasePathDisplay => @"%AppData%\HealthChecker\healthchecker.db";
+    public string DataDirectoryPath => _dataDirectory;
+    public string DataDirectoryPathDisplay => @"%AppData%\HealthChecker";
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -80,6 +83,57 @@ public sealed class SqliteMonitoringStore
                                   ON CONFLICT(key) DO UPDATE SET value = excluded.value;
                                   """;
             command.Parameters.AddWithValue("$key", SettingsStartWithWindows);
+            command.Parameters.AddWithValue("$value", enabled ? "1" : "0");
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            _dbGate.Release();
+        }
+    }
+
+    public async Task<bool> LoadStartMinimizedToTrayAsync(CancellationToken cancellationToken = default)
+    {
+        await _dbGate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = OpenConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT value FROM settings WHERE key = $key LIMIT 1;";
+            command.Parameters.AddWithValue("$key", SettingsStartMinimizedToTray);
+
+            var value = await command.ExecuteScalarAsync(cancellationToken);
+            if (value is null)
+            {
+                return false;
+            }
+
+            return string.Equals(value.ToString(), "1", StringComparison.Ordinal);
+        }
+        finally
+        {
+            _dbGate.Release();
+        }
+    }
+
+    public async Task SaveStartMinimizedToTrayAsync(bool enabled, CancellationToken cancellationToken = default)
+    {
+        await _dbGate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = OpenConnection();
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                                  INSERT INTO settings(key, value)
+                                  VALUES($key, $value)
+                                  ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+                                  """;
+            command.Parameters.AddWithValue("$key", SettingsStartMinimizedToTray);
             command.Parameters.AddWithValue("$value", enabled ? "1" : "0");
 
             await command.ExecuteNonQueryAsync(cancellationToken);
@@ -385,6 +439,84 @@ public sealed class SqliteMonitoringStore
             }
 
             return buckets;
+        }
+        finally
+        {
+            _dbGate.Release();
+        }
+    }
+
+    public async Task CompactDatabaseAsync(CancellationToken cancellationToken = default)
+    {
+        await _dbGate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = OpenConnection();
+            await connection.OpenAsync(cancellationToken);
+            await ApplyPragmasAsync(connection, cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                                  PRAGMA wal_checkpoint(TRUNCATE);
+                                  VACUUM;
+                                  """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            _dbGate.Release();
+        }
+    }
+
+    public async Task ResetStatisticsAsync(DateTimeOffset cutoffUtc, CancellationToken cancellationToken = default)
+    {
+        await _dbGate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = OpenConnection();
+            await connection.OpenAsync(cancellationToken);
+            await ApplyPragmasAsync(connection, cancellationToken);
+
+            var cutoffUnix = cutoffUtc.ToUnixTimeSeconds();
+            using (var transaction = connection.BeginTransaction())
+            {
+                await using (var deleteCommand = connection.CreateCommand())
+                {
+                    deleteCommand.Transaction = transaction;
+                    deleteCommand.CommandText = "DELETE FROM probes WHERE ts_utc <= $cutoff;";
+                    deleteCommand.Parameters.AddWithValue("$cutoff", cutoffUnix);
+                    await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+                }
+
+                await using (var updateTargets = connection.CreateCommand())
+                {
+                    updateTargets.Transaction = transaction;
+                    updateTargets.CommandText = """
+                                                UPDATE targets
+                                                SET
+                                                    last_checked_utc = (
+                                                        SELECT MAX(p.ts_utc)
+                                                        FROM probes p
+                                                        WHERE p.target_id = targets.id
+                                                    ),
+                                                    last_online_utc = (
+                                                        SELECT MAX(p.ts_utc)
+                                                        FROM probes p
+                                                        WHERE p.target_id = targets.id AND p.is_online = 1
+                                                    );
+                                                """;
+                    await updateTargets.ExecuteNonQueryAsync(cancellationToken);
+                }
+
+                transaction.Commit();
+            }
+
+            await using var compactCommand = connection.CreateCommand();
+            compactCommand.CommandText = """
+                                         PRAGMA wal_checkpoint(TRUNCATE);
+                                         VACUUM;
+                                         """;
+            await compactCommand.ExecuteNonQueryAsync(cancellationToken);
         }
         finally
         {

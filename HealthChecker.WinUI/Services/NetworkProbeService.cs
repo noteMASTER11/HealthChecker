@@ -6,7 +6,9 @@ namespace HealthChecker_WinUI.Services;
 
 public sealed class NetworkProbeService
 {
-    private const int PingTimeoutMs = 900;
+    private const int PingTimeoutMs = 1_200;
+    private const int RetryDelayMs = 120;
+    private const int MaxAttempts = 2;
 
     public async Task<ProbeResult> ProbeAsync(string address, CancellationToken cancellationToken)
     {
@@ -28,17 +30,51 @@ public sealed class NetworkProbeService
         {
             var resolvedIp = await ResolveIpAsync(normalizedAddress, cancellationToken);
             var pingTarget = resolvedIp ?? normalizedAddress;
+            PingReply? lastReply = null;
+            string? lastError = null;
 
-            using var ping = new Ping();
-            var reply = await ping.SendPingAsync(pingTarget, PingTimeoutMs).WaitAsync(cancellationToken);
+            for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+            {
+                try
+                {
+                    using var ping = new Ping();
+                    lastReply = await ping.SendPingAsync(pingTarget, PingTimeoutMs).WaitAsync(cancellationToken);
+
+                    if (lastReply.Status == IPStatus.Success)
+                    {
+                        return new ProbeResult
+                        {
+                            Timestamp = timestamp,
+                            IsOnline = true,
+                            PingMs = lastReply.RoundtripTime,
+                            ResolvedIp = resolvedIp,
+                            Error = null
+                        };
+                    }
+
+                    lastError = lastReply.Status.ToString();
+                    if (attempt < MaxAttempts && lastReply.Status == IPStatus.TimedOut)
+                    {
+                        await Task.Delay(RetryDelayMs, cancellationToken);
+                        continue;
+                    }
+
+                    break;
+                }
+                catch (PingException exception) when (attempt < MaxAttempts)
+                {
+                    lastError = exception.Message;
+                    await Task.Delay(RetryDelayMs, cancellationToken);
+                }
+            }
 
             return new ProbeResult
             {
                 Timestamp = timestamp,
-                IsOnline = reply.Status == IPStatus.Success,
-                PingMs = reply.Status == IPStatus.Success ? reply.RoundtripTime : null,
+                IsOnline = false,
+                PingMs = null,
                 ResolvedIp = resolvedIp,
-                Error = reply.Status == IPStatus.Success ? null : reply.Status.ToString()
+                Error = lastError ?? lastReply?.Status.ToString() ?? "Unknown probe failure."
             };
         }
         catch (OperationCanceledException)

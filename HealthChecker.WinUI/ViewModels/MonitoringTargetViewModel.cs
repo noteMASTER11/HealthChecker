@@ -310,6 +310,26 @@ public sealed class MonitoringTargetViewModel : ObservableObject
         OnPropertyChanged(nameof(FullHistoryHint));
     }
 
+    public void ResetStatistics()
+    {
+        _lastHourSamples.Clear();
+        _recentSamples.Clear();
+
+        IsOnline = null;
+        CurrentPingMs = null;
+        LastCheckedUtc = null;
+        LastOnlineUtc = null;
+        LastError = string.Empty;
+
+        AvailabilityBars.Clear();
+        PingBars.Clear();
+        FullHistoryBars.Clear();
+
+        OnPropertyChanged(nameof(NoDataHint));
+        OnPropertyChanged(nameof(FullHistoryHint));
+        RaiseComputedProperties();
+    }
+
     private void AppendSampleToWindows(HealthSample sample)
     {
         _lastHourSamples.Add(sample);

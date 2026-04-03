@@ -16,8 +16,10 @@
             <Border CornerRadius="12" Padding="16" BorderThickness="1" BorderBrush="#3C3C3C" Background="#22212A">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Behavior" FontSize="20" FontWeight="SemiBold" />
-                    <ToggleSwitch Header="Start with Windows" IsOn="True" />
-                    <ToggleSwitch Header="Start minimized to tray" IsOn="True" />
+                    <ToggleSwitch Header="Start with Windows"
+                                  IsOn="{Binding StartWithWindows, Mode=TwoWay}" />
+                    <ToggleSwitch Header="Start minimized to tray"
+                                  IsOn="{Binding StartMinimizedToTray, Mode=TwoWay}" />
                     <ComboBox Header="Probe interval" SelectedIndex="0">
                         <ComboBoxItem Content="1 second" />
                         <ComboBoxItem Content="2 seconds" />
@@ -29,11 +31,23 @@
             <Border CornerRadius="12" Padding="16" BorderThickness="1" BorderBrush="#3C3C3C" Background="#22212A">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Storage" FontSize="20" FontWeight="SemiBold" />
-                    <TextBlock Text="SQLite local database in %AppData%\\HealthChecker" Opacity="0.85" />
+                    <TextBlock Text="{Binding StateStorePathDisplay}" Opacity="0.85" />
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button Content="Open storage folder" />
-                        <Button Content="Compact database" />
+                        <Button Content="Open storage folder" Click="OpenStorageFolder_Click" />
+                        <Button Content="Compact database" Click="CompactDatabase_Click" />
                     </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border CornerRadius="12" Padding="16" BorderThickness="1" BorderBrush="#5A2A2A" Background="#2A1C23">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Maintenance" FontSize="20" FontWeight="SemiBold" />
+                    <TextBlock Text="Reset statistics clears current charts immediately, then removes stored probe history in background up to the click timestamp."
+                               TextWrapping="WrapWholeWords"
+                               Opacity="0.85" />
+                    <Button Content="Reset statistics"
+                            HorizontalAlignment="Left"
+                            Click="ResetStatistics_Click" />
                 </StackPanel>
             </Border>
         </StackPanel>

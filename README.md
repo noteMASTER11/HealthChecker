@@ -124,6 +124,31 @@ artifacts\v1.0.0\
 
 This avoids the common issue where only `HealthChecker.exe` is uploaded without its runtime dependencies.
 
+### WinUI installer (MSIX)
+
+Build a signed MSIX installer package for WinUI:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-winui-installer.ps1 -Version 1.1.0 -Configuration Release
+```
+
+Output:
+
+```text
+artifacts\v1.1.0\installer\
+  HealthChecker-v1.1.0-msix-installer.zip
+  package\
+    HealthChecker-v1.1.0-x64.msix
+    HealthChecker-v1.1.0-x64.cer
+    Install-HealthChecker-v1.1.0.ps1
+```
+
+Install flow:
+
+1. Unzip `HealthChecker-v1.1.0-msix-installer.zip`.
+2. Run `Install-HealthChecker-v1.1.0.ps1` **as Administrator**.
+3. The script imports the signing certificate and installs the MSIX package.
+
 ### Framework-dependent publish (dev/internal usage)
 
 ```powershell
