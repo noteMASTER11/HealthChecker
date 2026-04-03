@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Windows.Input;
 using H.NotifyIcon;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -10,7 +11,21 @@ namespace HealthChecker_WinUI;
 
 public sealed partial class MainWindow : Window
 {
+    private sealed class ActionCommand(Action execute) : ICommand
+    {
+        public event EventHandler? CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter) => execute();
+    }
+
     private readonly TaskbarIcon _trayIcon = new();
+    private readonly ICommand _openFromTrayCommand;
     private readonly bool _startHiddenInTray;
     private bool _startupHideApplied;
     private bool _isExitRequested;
@@ -18,6 +33,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(bool startHiddenInTray)
     {
         InitializeComponent();
+        _openFromTrayCommand = new ActionCommand(RestoreFromTray);
         _startHiddenInTray = startHiddenInTray;
 
         ExtendsContentIntoTitleBar = true;
@@ -39,6 +55,8 @@ public sealed partial class MainWindow : Window
         trayMenu.Items.Add(exitItem);
 
         _trayIcon.ContextFlyout = trayMenu;
+        _trayIcon.LeftClickCommand = _openFromTrayCommand;
+        _trayIcon.DoubleClickCommand = _openFromTrayCommand;
         _trayIcon.ToolTipText = "HealthChecker";
         _trayIcon.Icon = SystemIcons.Shield;
         _trayIcon.ForceCreate();
@@ -108,20 +126,42 @@ public sealed partial class MainWindow : Window
 
     private void TrayOpen_Click(object sender, RoutedEventArgs e)
     {
-        AppWindow.Show();
-        Activate();
+        RestoreFromTray();
     }
 
     private void TrayExit_Click(object sender, RoutedEventArgs e)
     {
-        _isExitRequested = true;
-        _trayIcon.Dispose();
-        Close();
+        RunOnUi(() =>
+        {
+            _isExitRequested = true;
+            _trayIcon.Dispose();
+            Close();
+        });
     }
 
     private void HideToTray()
     {
-        AppWindow.Hide();
+        RunOnUi(() => WindowExtensions.Hide(this));
+    }
+
+    private void RestoreFromTray()
+    {
+        RunOnUi(() =>
+        {
+            WindowExtensions.Show(this);
+            Activate();
+        });
+    }
+
+    private void RunOnUi(Action action)
+    {
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            action();
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(() => action());
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs args)
