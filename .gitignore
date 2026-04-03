@@ -21,6 +21,7 @@ desktop.ini
 # Local app data dumps (if exported into repo by mistake)
 state.json
 *.tmp
+artifacts/
 
 # Optional local reference source (not part of HealthChecker app)
 WinMTR-Official-0.92/

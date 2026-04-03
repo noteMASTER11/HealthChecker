@@ -95,7 +95,26 @@ dotnet run --project .\HealthChecker\HealthChecker.csproj -- --tray
 
 ## Publish (Release)
 
-### Framework-dependent publish
+### Recommended: self-contained single-file assets (for GitHub Releases)
+
+Use the repository script to generate runnable standalone `.exe` files:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-release-assets.ps1 -Version v1.0.0
+```
+
+Output:
+
+```text
+artifacts\v1.0.0\
+  HealthChecker-v1.0.0-debug.exe
+  HealthChecker-v1.0.0-release.exe
+  HealthChecker-v1.0.0-sources.zip
+```
+
+This avoids the common issue where only `HealthChecker.exe` is uploaded without its runtime dependencies.
+
+### Framework-dependent publish (dev/internal usage)
 
 ```powershell
 dotnet publish .\HealthChecker\HealthChecker.csproj -c Release -r win-x64 --self-contained false
