@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using HealthChecker.ViewModels;
 using Drawing = System.Drawing;

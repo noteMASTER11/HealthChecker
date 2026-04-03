@@ -1,13 +1,17 @@
-﻿using HealthChecker.Models;
+using System.Collections.ObjectModel;
+using HealthChecker.Models;
 using HealthChecker.Services;
 
 namespace HealthChecker.ViewModels;
 
 public sealed class TargetViewModel : ObservableObject
 {
-    private const int HistoryWindowSeconds = 86_400;
+    private const int RecentSampleCount = 60;
+    private static readonly TimeSpan HourWindow = TimeSpan.FromHours(1);
 
-    private readonly List<HealthSample> _samples = [];
+    private readonly List<HealthSample> _lastHourSamples = [];
+    private readonly List<HealthSample> _recentSamples = [];
+    private readonly List<HistoryBucketViewModel> _historyBuckets = [];
 
     private string _name;
     private string _description;
@@ -40,8 +44,15 @@ public sealed class TargetViewModel : ObservableObject
 
         if (samples is { Count: > 0 })
         {
-            _samples.AddRange(samples.OrderBy(static sample => sample.Timestamp));
-            var latestSample = _samples[^1];
+            foreach (var sample in samples.OrderBy(static sample => sample.Timestamp))
+            {
+                AppendSampleToWindows(sample);
+            }
+
+            var latestSample = _lastHourSamples.Count > 0
+                ? _lastHourSamples[^1]
+                : _recentSamples[^1];
+
             _isOnline = latestSample.IsOnline;
             _currentPingMs = latestSample.PingMs;
         }
@@ -112,28 +123,37 @@ public sealed class TargetViewModel : ObservableObject
         _ => "Waiting"
     };
 
-    public int SamplesCount => _samples.Count;
+    public int SamplesCount => _lastHourSamples.Count;
 
-    public IReadOnlyList<HealthSample> RecentSamples
+    public IReadOnlyList<HealthSample> RecentSamples => _recentSamples;
+
+    public string NoDataHint => _recentSamples.Count == 0 ? "Waiting for first samples..." : string.Empty;
+
+    public ReadOnlyCollection<HistoryBucketViewModel> FullHistoryBuckets => _historyBuckets.AsReadOnly();
+
+    public string FullHistoryHint => _historyBuckets.Count == 0
+        ? "No persisted history yet."
+        : $"Showing {_historyBuckets.Count} aggregated buckets for the whole monitoring period.";
+
+    public double MaxHistoryAveragePing
     {
         get
         {
-            if (_samples.Count <= 60)
-            {
-                return _samples.ToList();
-            }
+            var max = _historyBuckets
+                .Where(static bucket => bucket.AveragePingMs.HasValue)
+                .Select(static bucket => (double)bucket.AveragePingMs!.Value)
+                .DefaultIfEmpty(100)
+                .Max();
 
-            return _samples[^60..];
+            return Math.Max(60, max);
         }
     }
-
-    public string NoDataHint => _samples.Count == 0 ? "Waiting for first samples..." : string.Empty;
 
     public double MaxRecentPing
     {
         get
         {
-            var max = RecentSamples
+            var max = _recentSamples
                 .Where(static sample => sample.PingMs.HasValue)
                 .Select(static sample => (double)sample.PingMs!.Value)
                 .DefaultIfEmpty(100)
@@ -177,8 +197,18 @@ public sealed class TargetViewModel : ObservableObject
     public bool IsExpanded
     {
         get => _isExpanded;
-        set => SetProperty(ref _isExpanded, value);
+        set
+        {
+            if (!SetProperty(ref _isExpanded, value))
+            {
+                return;
+            }
+
+            ExpandedChanged?.Invoke(this, value);
+        }
     }
+
+    public event EventHandler<bool>? ExpandedChanged;
 
     public static TargetViewModel CreateNew(string name, string description, string address)
     {
@@ -209,7 +239,22 @@ public sealed class TargetViewModel : ObservableObject
             ResolvedIp = _resolvedIp,
             LastCheckedUtc = LastCheckedUtc,
             LastOnlineUtc = LastOnlineUtc,
-            Samples = _samples.ToList()
+            Samples = _lastHourSamples.ToList()
+        };
+    }
+
+    public MonitoredTargetState ToMetadataState()
+    {
+        return new MonitoredTargetState
+        {
+            Id = Id,
+            Name = Name,
+            Description = Description,
+            Address = Address,
+            ResolvedIp = _resolvedIp,
+            LastCheckedUtc = LastCheckedUtc,
+            LastOnlineUtc = LastOnlineUtc,
+            Samples = []
         };
     }
 
@@ -232,18 +277,41 @@ public sealed class TargetViewModel : ObservableObject
 
         LastError = result.Error ?? string.Empty;
 
-        _samples.Add(new HealthSample
+        AppendSampleToWindows(new HealthSample
         {
             Timestamp = result.Timestamp,
             IsOnline = result.IsOnline,
-            PingMs = result.PingMs,
-            ResolvedIp = result.ResolvedIp
+            PingMs = result.PingMs
         });
 
-        var cutoff = result.Timestamp.AddSeconds(-HistoryWindowSeconds);
-        _samples.RemoveAll(sample => sample.Timestamp < cutoff);
-
         RaiseComputedProperties();
+    }
+
+    public void SetFullHistoryBuckets(IReadOnlyList<HistoryBucketViewModel> buckets)
+    {
+        _historyBuckets.Clear();
+        _historyBuckets.AddRange(buckets);
+
+        OnPropertyChanged(nameof(FullHistoryBuckets));
+        OnPropertyChanged(nameof(FullHistoryHint));
+        OnPropertyChanged(nameof(MaxHistoryAveragePing));
+    }
+
+    private void AppendSampleToWindows(HealthSample sample)
+    {
+        _lastHourSamples.Add(sample);
+        _recentSamples.Add(sample);
+
+        if (_recentSamples.Count > RecentSampleCount)
+        {
+            _recentSamples.RemoveAt(0);
+        }
+
+        var cutoff = sample.Timestamp.Subtract(HourWindow);
+        while (_lastHourSamples.Count > 0 && _lastHourSamples[0].Timestamp < cutoff)
+        {
+            _lastHourSamples.RemoveAt(0);
+        }
     }
 
     private void RaiseComputedProperties()
@@ -255,7 +323,9 @@ public sealed class TargetViewModel : ObservableObject
         OnPropertyChanged(nameof(SamplesCount));
         OnPropertyChanged(nameof(RecentSamples));
         OnPropertyChanged(nameof(NoDataHint));
+        OnPropertyChanged(nameof(FullHistoryHint));
         OnPropertyChanged(nameof(MaxRecentPing));
+        OnPropertyChanged(nameof(MaxHistoryAveragePing));
         OnPropertyChanged(nameof(UptimeLastHourPercent));
         OnPropertyChanged(nameof(UptimeLast24HoursPercent));
         OnPropertyChanged(nameof(AveragePingLastHourDisplay));
@@ -266,7 +336,7 @@ public sealed class TargetViewModel : ObservableObject
     private double CalculateUptime(TimeSpan timeWindow)
     {
         var from = DateTimeOffset.UtcNow.Subtract(timeWindow);
-        var snapshot = _samples.Where(sample => sample.Timestamp >= from).ToList();
+        var snapshot = _lastHourSamples.Where(sample => sample.Timestamp >= from).ToList();
 
         if (snapshot.Count == 0)
         {
@@ -293,7 +363,7 @@ public sealed class TargetViewModel : ObservableObject
     {
         var from = DateTimeOffset.UtcNow.Subtract(timeWindow);
 
-        return _samples
+        return _lastHourSamples
             .Where(sample => sample.Timestamp >= from && sample.PingMs.HasValue)
             .Select(sample => sample.PingMs!.Value);
     }

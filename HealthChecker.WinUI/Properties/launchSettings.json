@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HealthChecker.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "HealthChecker.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

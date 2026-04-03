@@ -43,17 +43,179 @@
             <Setter Property="Margin" Value="0,0,8,0" />
         </Style>
 
+        <Style x:Key="TargetExpanderStyle" TargetType="Expander">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0">
+                                <ContentPresenter Margin="0,0,44,0"
+                                                  ContentSource="Header" />
+                                <ToggleButton x:Name="ExpanderToggle"
+                                              Width="28"
+                                              Height="28"
+                                              Margin="0,8,8,0"
+                                              HorizontalAlignment="Right"
+                                              VerticalAlignment="Top"
+                                              Cursor="Hand"
+                                              BorderThickness="1"
+                                              Background="#0F172A"
+                                              BorderBrush="#334155"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                    <TextBlock x:Name="ChevronText"
+                                               Text=">"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="#CBD5E1" />
+                                </ToggleButton>
+                            </Grid>
+
+                            <ContentPresenter x:Name="ExpandSite"
+                                              Grid.Row="1"
+                                              Visibility="Collapsed"
+                                              ContentSource="Content" />
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger SourceName="ExpanderToggle" Property="IsChecked" Value="True">
+                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="ExpanderToggle" Property="Background" Value="#22C55E" />
+                                <Setter TargetName="ExpanderToggle" Property="BorderBrush" Value="#22C55E" />
+                                <Setter TargetName="ChevronText" Property="Text" Value="v" />
+                                <Setter TargetName="ChevronText" Property="Foreground" Value="#0B1220" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="WindowControlButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="Background" Value="#0F172A" />
+            <Setter Property="Foreground" Value="#CBD5E1" />
+            <Setter Property="BorderBrush" Value="#334155" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontFamily" Value="Bahnschrift" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1E293B" />
+                    <Setter Property="Foreground" Value="#F8FAFC" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#334155" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="WindowCloseButtonStyle" TargetType="Button" BasedOn="{StaticResource WindowControlButtonStyle}">
+            <Setter Property="Background" Value="#7F1D1D" />
+            <Setter Property="BorderBrush" Value="#991B1B" />
+            <Setter Property="Foreground" Value="#FEE2E2" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#991B1B" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#B91C1C" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CustomScrollBarButtonStyle" TargetType="RepeatButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CustomScrollBarThumbStyle" TargetType="Thumb">
+            <Setter Property="Background" Value="#334155" />
+            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#475569" />
+                </Trigger>
+                <Trigger Property="IsDragging" Value="True">
+                    <Setter Property="Background" Value="#64748B" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="#0B1220" />
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{TemplateBinding Background}">
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource CustomScrollBarButtonStyle}" Command="ScrollBar.PageUpCommand" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource CustomScrollBarThumbStyle}" />
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource CustomScrollBarButtonStyle}" Command="ScrollBar.PageDownCommand" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Orientation" Value="Horizontal">
+                                <Setter Property="Height" Value="10" />
+                                <Setter Property="Width" Value="Auto" />
+                                <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
+                            </Trigger>
+                            <Trigger Property="Orientation" Value="Vertical">
+                                <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="True" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 
     </Window.Resources>
 
     <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="16" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="16" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
                 Padding="20"
@@ -177,7 +339,7 @@
                               IsChecked="{Binding StartWithWindows}"
                               FontFamily="Bahnschrift"
                               Margin="0,0,20,0" />
-                    <TextBlock Text="State file: %AppData%\\HealthChecker\\state.json"
+                    <TextBlock Text="{Binding StateStorePathDisplay, StringFormat=State store: {0}}"
                                Foreground="#64748B"
                                FontFamily="Bahnschrift"
                                VerticalAlignment="Center" />
@@ -197,94 +359,69 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Expander Margin="0,0,0,14"
+                                      Style="{StaticResource TargetExpanderStyle}"
                                       Background="#0B1220"
                                       BorderBrush="#1E293B"
                                       BorderThickness="1"
                                       HorizontalContentAlignment="Stretch"
                                       IsExpanded="{Binding IsExpanded}">
                                 <Expander.Header>
-                                    <Border Padding="10,10,10,8"
+                                    <Border Padding="12,10"
                                             Background="#071227"
-                                            CornerRadius="8">
+                                            CornerRadius="8"
+                                            MinHeight="78">
                                         <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="34" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="180" />
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="140" />
-                                            <ColumnDefinition Width="36" />
-                                        </Grid.ColumnDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="220" />
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="42" />
+                                            </Grid.ColumnDefinitions>
 
-                                        <Border Grid.Column="0"
-                                                Width="28"
-                                                Height="28"
-                                                CornerRadius="14"
-                                                BorderThickness="1"
-                                                VerticalAlignment="Center">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#0F172A" />
-                                                    <Setter Property="BorderBrush" Value="#334155" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
-                                                            <Setter Property="Background" Value="#22C55E" />
-                                                            <Setter Property="BorderBrush" Value="#22C55E" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <TextBlock FontSize="14"
-                                                       FontWeight="SemiBold"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Text" Value=">" />
-                                                        <Setter Property="Foreground" Value="#CBD5E1" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
-                                                                <Setter Property="Text" Value="v" />
-                                                                <Setter Property="Foreground" Value="#0B1220" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </Border>
-
-                                        <StackPanel Grid.Column="1" Margin="12,0,18,0">
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
                                             <TextBlock Text="{Binding Name}"
                                                        Foreground="#F8FAFC"
                                                        FontSize="16"
                                                        FontWeight="SemiBold"
-                                                       FontFamily="Bahnschrift" />
+                                                       FontFamily="Bahnschrift"
+                                                       TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Description}"
                                                        Foreground="#94A3B8"
                                                        FontSize="12"
                                                        FontFamily="Bahnschrift"
-                                                       TextTrimming="CharacterEllipsis" />
+                                                       Margin="0,2,0,0"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
 
-                                        <StackPanel Grid.Column="2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="1" Margin="0,0,10,0" VerticalAlignment="Center">
                                             <TextBlock Text="IP" Foreground="#64748B" FontSize="11" FontFamily="Bahnschrift" />
-                                            <TextBlock Text="{Binding ResolvedIpDisplay}" Foreground="#E2E8F0" FontFamily="Bahnschrift" />
+                                            <TextBlock Text="{Binding ResolvedIpDisplay}"
+                                                       Foreground="#E2E8F0"
+                                                       FontFamily="Bahnschrift"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
 
-                                        <StackPanel Grid.Column="3" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="2" Margin="0,0,10,0" VerticalAlignment="Center">
                                             <TextBlock Text="Ping" Foreground="#64748B" FontSize="11" FontFamily="Bahnschrift" />
-                                            <TextBlock Text="{Binding CurrentPingDisplay}" Foreground="#E2E8F0" FontFamily="Bahnschrift" />
+                                            <TextBlock Text="{Binding CurrentPingDisplay}"
+                                                       Foreground="#E2E8F0"
+                                                       FontFamily="Bahnschrift"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
 
-                                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,10,0" VerticalAlignment="Center">
                                             <Ellipse Width="10"
                                                      Height="10"
                                                      Margin="0,0,8,0"
                                                      Fill="{Binding IsOnline, Converter={StaticResource StatusBrushConverter}}" />
-                                            <TextBlock Text="{Binding StatusText}" Foreground="#CBD5E1" FontFamily="Bahnschrift" />
+                                            <TextBlock Text="{Binding StatusText}"
+                                                       Foreground="#CBD5E1"
+                                                       FontFamily="Bahnschrift"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
 
-                                        <Button Grid.Column="5"
+                                        <Button Grid.Column="4"
                                                 Content="X"
                                                 Width="28"
                                                 Height="28"
@@ -295,7 +432,7 @@
                                                 Cursor="Hand"
                                                 Command="{Binding DataContext.RemoveTargetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}" />
-                                        </Grid>
+                                            </Grid>
                                     </Border>
                                 </Expander.Header>
 
@@ -304,6 +441,8 @@
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="16" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="14" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="14" />
                                             <RowDefinition Height="Auto" />
@@ -452,7 +591,108 @@
                                             </Border>
                                         </Grid>
 
-                                        <TextBlock Grid.Row="4"
+                                        <Grid Grid.Row="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="16" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0" Background="#111827" CornerRadius="12" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Full history uptime (all time, aggregated)"
+                                                               Foreground="#CBD5E1"
+                                                               FontFamily="Bahnschrift"
+                                                               Margin="0,0,0,10" />
+                                                    <ItemsControl ItemsSource="{Binding FullHistoryBuckets}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <UniformGrid Rows="1" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Grid Height="56" Margin="1,0">
+                                                                    <Border VerticalAlignment="Bottom"
+                                                                            CornerRadius="2"
+                                                                            Background="{Binding StatusByUptime, Converter={StaticResource StatusBrushConverter}}">
+                                                                        <Border.Height>
+                                                                            <Binding Path="UptimeBarHeight" />
+                                                                        </Border.Height>
+                                                                        <Border.ToolTip>
+                                                                            <ToolTip Background="#0B1220"
+                                                                                     BorderBrush="#334155"
+                                                                                     Foreground="#E2E8F0">
+                                                                                <StackPanel>
+                                                                                    <TextBlock Text="{Binding TimeRangeDisplay}" />
+                                                                                    <TextBlock Text="{Binding UptimePercent, StringFormat=Uptime: {0:F1}%}" />
+                                                                                    <TextBlock Text="{Binding Samples, StringFormat=Samples: {0}}" />
+                                                                                    <TextBlock Text="{Binding AveragePingDisplay, StringFormat=Avg ping: {0}}" />
+                                                                                </StackPanel>
+                                                                            </ToolTip>
+                                                                        </Border.ToolTip>
+                                                                    </Border>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <TextBlock Text="{Binding FullHistoryHint}"
+                                                               Margin="0,8,0,0"
+                                                               Foreground="#64748B"
+                                                               FontFamily="Bahnschrift" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <Border Grid.Column="2" Background="#111827" CornerRadius="12" Padding="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="Full history ping (all time, aggregated)"
+                                                               Foreground="#CBD5E1"
+                                                               FontFamily="Bahnschrift"
+                                                               Margin="0,0,0,10" />
+                                                    <ItemsControl ItemsSource="{Binding FullHistoryBuckets}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <UniformGrid Rows="1" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Grid Height="80" Margin="1,0">
+                                                                    <Border VerticalAlignment="Bottom"
+                                                                            CornerRadius="2"
+                                                                            Background="{Binding StatusByUptime, Converter={StaticResource StatusBrushConverter}}">
+                                                                        <Border.Height>
+                                                                            <MultiBinding Converter="{StaticResource PingHeightConverter}">
+                                                                                <Binding Path="AveragePingMs" />
+                                                                                <Binding Path="DataContext.MaxHistoryAveragePing" RelativeSource="{RelativeSource AncestorType=Expander}" />
+                                                                            </MultiBinding>
+                                                                        </Border.Height>
+                                                                        <Border.ToolTip>
+                                                                            <ToolTip Background="#0B1220"
+                                                                                     BorderBrush="#334155"
+                                                                                     Foreground="#E2E8F0">
+                                                                                <StackPanel>
+                                                                                    <TextBlock Text="{Binding TimeRangeDisplay}" />
+                                                                                    <TextBlock Text="{Binding AveragePingDisplay, StringFormat=Avg ping: {0}}" />
+                                                                                    <TextBlock Text="{Binding UptimePercent, StringFormat=Uptime: {0:F1}%}" />
+                                                                                    <TextBlock Text="{Binding Samples, StringFormat=Samples: {0}}" />
+                                                                                </StackPanel>
+                                                                            </ToolTip>
+                                                                        </Border.ToolTip>
+                                                                    </Border>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <TextBlock Text="{Binding FullHistoryHint}"
+                                                               Margin="0,8,0,0"
+                                                               Foreground="#64748B"
+                                                               FontFamily="Bahnschrift" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+
+                                        <TextBlock Grid.Row="6"
                                                    Text="{Binding LastError}"
                                                    Foreground="#FCA5A5"
                                                    FontFamily="Bahnschrift" />
@@ -550,7 +790,8 @@
                    Text="{Binding StatusMessage}"
                    Foreground="#94A3B8"
                    FontFamily="Bahnschrift" />
-    </Grid>
+        </Grid>
 </Window>
+
 
 

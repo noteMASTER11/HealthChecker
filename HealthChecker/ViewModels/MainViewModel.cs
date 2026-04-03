@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using HealthChecker.Models;
@@ -8,13 +9,17 @@ namespace HealthChecker.ViewModels;
 
 public sealed class MainViewModel : ObservableObject
 {
-    private readonly AppStateStore _stateStore = new();
+    private static readonly TimeSpan InMemoryHistoryWindow = TimeSpan.FromHours(1);
+    private static readonly TimeSpan FullHistoryRefreshInterval = TimeSpan.FromSeconds(15);
+
+    private readonly SqliteMonitoringStore _stateStore = new();
     private readonly NetworkProbeService _probeService = new();
+    private readonly MonitoringWorkerService _monitorWorker;
     private readonly StartupRegistrationService _startupService = new();
-    private readonly DispatcherTimer _monitorTimer;
-    private readonly SemaphoreSlim _cycleSemaphore = new(1, 1);
-    private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
     private readonly CancellationTokenSource _shutdownTokenSource = new();
+    private readonly Dispatcher _dispatcher;
+    private readonly object _historyRefreshSync = new();
+    private readonly Dictionary<Guid, DateTimeOffset> _historyRefreshMoments = [];
 
     private bool _isInitialized;
     private bool _isMonitoring = true;
@@ -25,11 +30,13 @@ public sealed class MainViewModel : ObservableObject
     private string _newDescription = string.Empty;
     private string _statusMessage = "Ready.";
     private string _traceCaption = "Traceroute";
-    private int _saveTickCounter;
     private TraceSessionViewModel? _traceSession;
 
     public MainViewModel()
     {
+        _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        _monitorWorker = new MonitoringWorkerService(_probeService, TimeSpan.FromSeconds(1));
+
         Targets = [];
 
         AddTargetCommand = new RelayCommand(AddTarget);
@@ -39,13 +46,6 @@ public sealed class MainViewModel : ObservableObject
         OpenTraceCommand = new RelayCommand<TargetViewModel>(OpenTrace);
         BackToListCommand = new RelayCommand(BackToList);
         StopTraceCommand = new RelayCommand(StopTrace);
-
-        _monitorTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(1)
-        };
-
-        _monitorTimer.Tick += async (_, _) => await RunMonitoringCycleAsync();
     }
 
     public ObservableCollection<TargetViewModel> Targets { get; }
@@ -114,7 +114,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             TryApplyStartup(value);
-            _ = SaveStateSafeAsync();
+            _ = SaveStartupSettingAsync(value, _shutdownTokenSource.Token);
         }
     }
 
@@ -152,6 +152,8 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _statusMessage, value);
     }
 
+    public string StateStorePathDisplay => _stateStore.DatabasePathDisplay;
+
     public async Task InitializeAsync()
     {
         if (_isInitialized)
@@ -159,39 +161,55 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var state = await _stateStore.LoadAsync(_shutdownTokenSource.Token);
+        await _stateStore.InitializeAsync(_shutdownTokenSource.Token);
+
+        var loadedTargets = await _stateStore.LoadTargetsAsync(InMemoryHistoryWindow, _shutdownTokenSource.Token);
 
         Targets.Clear();
-        foreach (var targetState in state.Targets)
+        foreach (var targetState in loadedTargets)
         {
-            Targets.Add(TargetViewModel.FromState(targetState));
+            var target = TargetViewModel.FromState(targetState);
+            AttachTarget(target);
+            Targets.Add(target);
         }
 
-        _startWithWindows = state.StartWithWindows;
+        _startWithWindows = await _stateStore.LoadStartWithWindowsAsync(_shutdownTokenSource.Token);
         OnPropertyChanged(nameof(StartWithWindows));
 
         TryApplyStartup(_startWithWindows, updateStatusOnSuccess: false);
 
-        _monitorTimer.Start();
+        await _monitorWorker.StartAsync(
+            GetMonitoringTargetsSnapshot,
+            HandleProbeResultAsync,
+            OnWorkerError,
+            _shutdownTokenSource.Token);
+
+        _monitorWorker.IsPaused = !IsMonitoring;
+
         _isInitialized = true;
 
         StatusMessage = Targets.Count == 0
             ? "Add your first domain or IP to start monitoring."
             : $"Loaded targets: {Targets.Count}. Monitoring is active.";
 
-        await RunMonitoringCycleAsync();
+        await _monitorWorker.ProbeNowAsync(_shutdownTokenSource.Token);
     }
 
     public async Task ShutdownAsync()
     {
         await StopTraceSessionAsync();
-        _monitorTimer.Stop();
-        await SaveStateSafeAsync();
+        await _monitorWorker.StopAsync();
+        await _monitorWorker.DisposeAsync();
         _shutdownTokenSource.Cancel();
         _shutdownTokenSource.Dispose();
     }
 
     private void AddTarget()
+    {
+        _ = AddTargetAsync();
+    }
+
+    private async Task AddTargetAsync()
     {
         if (!AddressParser.TryNormalize(NewAddress, out var normalizedAddress, out var suggestedName))
         {
@@ -210,7 +228,10 @@ public sealed class MainViewModel : ObservableObject
             NewDescription.Trim(),
             normalizedAddress);
 
+        AttachTarget(target);
         Targets.Add(target);
+
+        await _stateStore.UpsertTargetAsync(target.ToMetadataState(), _shutdownTokenSource.Token);
 
         NewAddress = string.Empty;
         NewName = string.Empty;
@@ -218,8 +239,7 @@ public sealed class MainViewModel : ObservableObject
 
         StatusMessage = $"Added target: {target.Address}.";
 
-        _ = SaveStateSafeAsync();
-        _ = ProbeTargetAsync(target, _shutdownTokenSource.Token);
+        await _monitorWorker.ProbeNowAsync(_shutdownTokenSource.Token);
     }
 
     private void RemoveTarget(TargetViewModel? target)
@@ -229,14 +249,23 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        _ = RemoveTargetAsync(target);
+    }
+
+    private async Task RemoveTargetAsync(TargetViewModel target)
+    {
         Targets.Remove(target);
+        DetachTarget(target);
+
+        await _stateStore.RemoveTargetAsync(target.Id, _shutdownTokenSource.Token);
+
         StatusMessage = $"Removed target: {target.Address}.";
-        _ = SaveStateSafeAsync();
     }
 
     private void ToggleMonitoring()
     {
         IsMonitoring = !IsMonitoring;
+        _monitorWorker.IsPaused = !IsMonitoring;
 
         StatusMessage = IsMonitoring
             ? "Monitoring resumed."
@@ -244,13 +273,13 @@ public sealed class MainViewModel : ObservableObject
 
         if (IsMonitoring)
         {
-            _ = RunMonitoringCycleAsync();
+            _ = _monitorWorker.ProbeNowAsync(_shutdownTokenSource.Token);
         }
     }
 
     private void ProbeNow()
     {
-        _ = RunMonitoringCycleAsync(force: true);
+        _ = _monitorWorker.ProbeNowAsync(_shutdownTokenSource.Token);
     }
 
     private void OpenTrace(TargetViewModel? target)
@@ -316,64 +345,97 @@ public sealed class MainViewModel : ObservableObject
         TraceCaption = "Traceroute";
     }
 
-    private async Task RunMonitoringCycleAsync(bool force = false)
+    private IReadOnlyList<MonitoringTarget> GetMonitoringTargetsSnapshot()
     {
-        if (!force && (!IsMonitoring || Targets.Count == 0))
+        if (_dispatcher.CheckAccess())
+        {
+            return Targets.Select(static target => new MonitoringTarget(target.Id, target.Address)).ToList();
+        }
+
+        return _dispatcher.Invoke(() =>
+            Targets.Select(static target => new MonitoringTarget(target.Id, target.Address)).ToList());
+    }
+
+    private async Task HandleProbeResultAsync(
+        MonitoringTarget targetSnapshot,
+        ProbeResult result,
+        CancellationToken cancellationToken)
+    {
+        await _stateStore.AppendProbeAsync(targetSnapshot.Id, result, cancellationToken);
+
+        TargetViewModel? targetViewModel = null;
+
+        await _dispatcher.InvokeAsync(() =>
+        {
+            targetViewModel = Targets.FirstOrDefault(target => target.Id == targetSnapshot.Id);
+            targetViewModel?.ApplyProbeResult(result);
+        }, DispatcherPriority.Background, cancellationToken);
+
+        if (targetViewModel is null)
         {
             return;
         }
 
-        if (!await _cycleSemaphore.WaitAsync(0, _shutdownTokenSource.Token))
+        if (targetViewModel.IsExpanded)
         {
-            return;
-        }
-
-        try
-        {
-            var snapshot = Targets.ToList();
-            var tasks = snapshot.Select(target => ProbeTargetAsync(target, _shutdownTokenSource.Token));
-            await Task.WhenAll(tasks);
-
-            _saveTickCounter++;
-            if (_saveTickCounter >= 10)
-            {
-                _saveTickCounter = 0;
-                await SaveStateSafeAsync();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception exception)
-        {
-            StatusMessage = $"Monitoring loop failed: {exception.Message}";
-        }
-        finally
-        {
-            _cycleSemaphore.Release();
+            await RefreshFullHistoryAsync(targetViewModel, force: false, cancellationToken);
         }
     }
 
-    private async Task ProbeTargetAsync(TargetViewModel target, CancellationToken cancellationToken)
+    private async Task RefreshFullHistoryAsync(
+        TargetViewModel target,
+        bool force,
+        CancellationToken cancellationToken = default)
+    {
+        if (!force && !ShouldRefreshFullHistory(target.Id))
+        {
+            return;
+        }
+
+        var buckets = await _stateStore.LoadHistoryBucketsAsync(target.Id, maxBuckets: 120, cancellationToken);
+
+        var viewModels = buckets.Select(static bucket => new HistoryBucketViewModel
+        {
+            StartUtc = bucket.StartUtc,
+            EndUtc = bucket.EndUtc,
+            Samples = bucket.Samples,
+            OnlineSamples = bucket.OnlineSamples,
+            AveragePingMs = bucket.AveragePingMs
+        }).ToList();
+
+        await _dispatcher.InvokeAsync(() => target.SetFullHistoryBuckets(viewModels), DispatcherPriority.Background, cancellationToken);
+    }
+
+    private bool ShouldRefreshFullHistory(Guid targetId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        lock (_historyRefreshSync)
+        {
+            if (!_historyRefreshMoments.TryGetValue(targetId, out var lastRefresh))
+            {
+                _historyRefreshMoments[targetId] = now;
+                return true;
+            }
+
+            if (now - lastRefresh < FullHistoryRefreshInterval)
+            {
+                return false;
+            }
+
+            _historyRefreshMoments[targetId] = now;
+            return true;
+        }
+    }
+
+    private async Task SaveStartupSettingAsync(bool enabled, CancellationToken cancellationToken)
     {
         try
         {
-            var result = await _probeService.ProbeAsync(target.Address, cancellationToken);
-            target.ApplyProbeResult(result);
-        }
-        catch (OperationCanceledException)
-        {
+            await _stateStore.SaveStartWithWindowsAsync(enabled, cancellationToken);
         }
         catch (Exception exception)
         {
-            target.ApplyProbeResult(new ProbeResult
-            {
-                Timestamp = DateTimeOffset.UtcNow,
-                IsOnline = false,
-                PingMs = null,
-                ResolvedIp = null,
-                Error = exception.Message
-            });
+            StatusMessage = $"Save failed: {exception.Message}";
         }
     }
 
@@ -395,24 +457,35 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private async Task SaveStateSafeAsync()
+    private void OnWorkerError(Exception exception)
     {
-        await _saveSemaphore.WaitAsync();
-        try
+        _ = _dispatcher.InvokeAsync(() =>
         {
-            await _stateStore.SaveAsync(new AppState
-            {
-                StartWithWindows = StartWithWindows,
-                Targets = Targets.Select(static target => target.ToState()).ToList()
-            });
-        }
-        catch (Exception exception)
+            StatusMessage = $"Monitoring loop failed: {exception.Message}";
+        });
+    }
+
+    private void AttachTarget(TargetViewModel target)
+    {
+        target.ExpandedChanged += OnTargetExpandedChanged;
+    }
+
+    private void DetachTarget(TargetViewModel target)
+    {
+        target.ExpandedChanged -= OnTargetExpandedChanged;
+        lock (_historyRefreshSync)
         {
-            StatusMessage = $"Save failed: {exception.Message}";
+            _historyRefreshMoments.Remove(target.Id);
         }
-        finally
+    }
+
+    private void OnTargetExpandedChanged(object? sender, bool isExpanded)
+    {
+        if (!isExpanded || sender is not TargetViewModel target)
         {
-            _saveSemaphore.Release();
+            return;
         }
+
+        _ = RefreshFullHistoryAsync(target, force: true, _shutdownTokenSource.Token);
     }
 }

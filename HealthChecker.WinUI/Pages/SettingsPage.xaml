@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HealthChecker_WinUI.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Padding="24,16,24,24">
+            <TextBlock Text="Settings"
+                       FontSize="34"
+                       FontWeight="SemiBold" />
+
+            <Border CornerRadius="12" Padding="16" BorderThickness="1" BorderBrush="#3C3C3C" Background="#22212A">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Behavior" FontSize="20" FontWeight="SemiBold" />
+                    <ToggleSwitch Header="Start with Windows" IsOn="True" />
+                    <ToggleSwitch Header="Start minimized to tray" IsOn="True" />
+                    <ComboBox Header="Probe interval" SelectedIndex="0">
+                        <ComboBoxItem Content="1 second" />
+                        <ComboBoxItem Content="2 seconds" />
+                        <ComboBoxItem Content="5 seconds" />
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+
+            <Border CornerRadius="12" Padding="16" BorderThickness="1" BorderBrush="#3C3C3C" Background="#22212A">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Storage" FontSize="20" FontWeight="SemiBold" />
+                    <TextBlock Text="SQLite local database in %AppData%\\HealthChecker" Opacity="0.85" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Open storage folder" />
+                        <Button Content="Compact database" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

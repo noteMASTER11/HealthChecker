@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HealthChecker_WinUI.Pages.TracePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Padding="24,16,24,24">
+            <TextBlock Text="Traceroute"
+                       FontSize="34"
+                       FontWeight="SemiBold" />
+
+            <Border CornerRadius="12" Padding="16" BorderThickness="1" BorderBrush="#3C3C3C" Background="#22212A">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBox Width="360" PlaceholderText="Target host (for example 8.8.8.8)" />
+                    <Button Content="Start" />
+                    <Button Content="Stop" />
+                </StackPanel>
+            </Border>
+
+            <Border CornerRadius="12" Padding="16" BorderThickness="1" BorderBrush="#3C3C3C" Background="#22212A">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Route table" FontSize="20" FontWeight="SemiBold" />
+
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="70" />
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="90" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Hostname" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="Loss %" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="2" Text="Best" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="3" Text="Avg" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="4" Text="Worst" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="5" Text="Last" FontWeight="SemiBold" />
+                    </Grid>
+
+                    <ListView SelectionMode="None">
+                        <ListViewItem>
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="192.168.1.1" />
+                                <TextBlock Grid.Column="1" Text="0" />
+                                <TextBlock Grid.Column="2" Text="1" />
+                                <TextBlock Grid.Column="3" Text="2" />
+                                <TextBlock Grid.Column="4" Text="4" />
+                                <TextBlock Grid.Column="5" Text="2" />
+                            </Grid>
+                        </ListViewItem>
+                        <ListViewItem>
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="dns.google" />
+                                <TextBlock Grid.Column="1" Text="0" />
+                                <TextBlock Grid.Column="2" Text="35" />
+                                <TextBlock Grid.Column="3" Text="39" />
+                                <TextBlock Grid.Column="4" Text="44" />
+                                <TextBlock Grid.Column="5" Text="38" />
+                            </Grid>
+                        </ListViewItem>
+                    </ListView>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
