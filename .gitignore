@@ -1,0 +1,26 @@
+# Build output
+**/bin/
+**/obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDE folders
+.vs/
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local app data dumps (if exported into repo by mistake)
+state.json
+*.tmp
+
+# Optional local reference source (not part of HealthChecker app)
+WinMTR-Official-0.92/

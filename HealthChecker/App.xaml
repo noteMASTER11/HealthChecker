@@ -1,0 +1,17 @@
+<Application x:Class="HealthChecker.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:HealthChecker.Converters">
+    <Application.Resources>
+        <SolidColorBrush x:Key="OnlineBrush" Color="#16A34A" />
+        <SolidColorBrush x:Key="OfflineBrush" Color="#DC2626" />
+        <SolidColorBrush x:Key="UnknownBrush" Color="#64748B" />
+
+        <converters:NullableBoolToBrushConverter x:Key="StatusBrushConverter"
+                                                 OnlineBrush="{StaticResource OnlineBrush}"
+                                                 OfflineBrush="{StaticResource OfflineBrush}"
+                                                 UnknownBrush="{StaticResource UnknownBrush}" />
+        <converters:BoolToStatusTextConverter x:Key="StatusTextConverter" />
+        <converters:PingHeightConverter x:Key="PingHeightConverter" />
+    </Application.Resources>
+</Application>
